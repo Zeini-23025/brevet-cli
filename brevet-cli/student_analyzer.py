@@ -8,7 +8,7 @@ def clear_screen():
     """Clears the console screen."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
-def load_data(filename="RESU_BEPC_2025_74821.csv"):
+def load_data(filename="data/RESU_BEPC_2025_74821.csv"):
     """
     Loads student data from a CSV file into a list of dictionaries.
     Handles potential file not found errors.
@@ -16,7 +16,6 @@ def load_data(filename="RESU_BEPC_2025_74821.csv"):
     data = []
     try:
         with open(filename, mode='r', encoding='utf-8') as csvfile:
-            # Sniff to detect CSV dialect, especially the delimiter
             reader = csv.DictReader(csvfile, delimiter=',')
             for row in reader:
                 # Convert numeric fields from string to float/int
