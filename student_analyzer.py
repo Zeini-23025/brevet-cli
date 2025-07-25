@@ -4,6 +4,7 @@ import csv
 import os
 import sys
 from collections import Counter
+from datetime import datetime
 
 try:
     import matplotlib.pyplot as plt
@@ -15,8 +16,19 @@ def clear_screen():
     """Clears the console screen."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
+def calculate_age(birthdate_str):
+    """Calculates age from a birthdate string in DD/MM/YYYY format."""
+    try:
+        birthdate = datetime.strptime(birthdate_str, '%d/%m/%Y')
+        # Assuming the exam year is 2025
+        today = datetime(2025, 1, 1)
+        age = today.year - birthdate.year - ((today.month, today.day) < (birthdate.month, birthdate.day))
+        return age
+    except (ValueError, TypeError):
+        return None
+
 def load_data(filename="data/RESU_BEPC_2025_74821.csv"):
-    """Loads student data from a CSV file."""
+    """Loads student data from a CSV file and calculates age."""
     data = []
     try:
         with open(filename, mode='r', encoding='utf-8') as csvfile:
@@ -25,6 +37,7 @@ def load_data(filename="data/RESU_BEPC_2025_74821.csv"):
                 try:
                     row['Num_Bepc'] = int(row['Num_Bepc'])
                     row['Moyenne_Bepc'] = float(row['Moyenne_Bepc'])
+                    row['Âge'] = calculate_age(row.get('DATE_NAISS'))
                     data.append(row)
                 except (ValueError, KeyError) as e:
                     print(f"Avertissement: Ligne ignorée pour cause de données invalides: {row}. Erreur: {e}")
@@ -80,7 +93,7 @@ def get_grouped_data(data, group_key):
     grouped_data = {}
     for student in data:
         key = student.get(group_key)
-        if key:
+        if key is not None:
             if key not in grouped_data:
                 grouped_data[key] = {'total': 0, 'admis': 0, 'averages': []}
             grouped_data[key]['total'] += 1
@@ -94,10 +107,19 @@ def calculate_grouped_stats(data, group_key):
     """Calculates and returns statistics grouped by a specific key."""
     if not data:
         return "Aucune donnée à analyser."
+    
+    if group_key == 'Âge':
+        data = [s for s in data if s.get('Âge') is not None]
+
     grouped_data = get_grouped_data(data, group_key)
     report = f"Statistiques par {group_key} :\n"
     report += "------------------------------------\n"
-    sorted_groups = sorted(grouped_data.items(), key=lambda item: item[1]['total'], reverse=True)
+    
+    if group_key == 'Âge':
+        sorted_groups = sorted(grouped_data.items(), key=lambda item: item[0])
+    else:
+        sorted_groups = sorted(grouped_data.items(), key=lambda item: item[1]['total'], reverse=True)
+
     for key, values in sorted_groups:
         total = values['total']
         admis = values['admis']
@@ -127,15 +149,31 @@ def plot_decision_distribution(data, output_dir):
 
 def plot_pass_rate_by_group(data, group_key, output_dir, top_n=15):
     """Plots the pass rate for the top N groups and saves to a file."""
-    grouped_data = get_grouped_data(data, group_key)
-    sorted_groups = sorted(grouped_data.items(), key=lambda item: item[1]['total'], reverse=True)[:top_n]
-    labels = [g[0] for g in sorted_groups]
+    if group_key == 'Âge':
+        data = [s for s in data if s.get('Âge') is not None]
+        grouped_data = get_grouped_data(data, group_key)
+        sorted_groups = sorted(grouped_data.items(), key=lambda item: item[0])
+    else:
+        grouped_data = get_grouped_data(data, group_key)
+        sorted_groups = sorted(grouped_data.items(), key=lambda item: item[1]['total'], reverse=True)[:top_n]
+
+    labels = [str(g[0]) for g in sorted_groups]
     pass_rates = [(g[1]['admis'] / g[1]['total']) * 100 if g[1]['total'] > 0 else 0 for g in sorted_groups]
+    
     plt.figure(figsize=(12, 8))
-    plt.barh(labels, pass_rates, color='skyblue')
-    plt.xlabel('Taux de réussite (%)')
-    plt.title(f'Taux de réussite par {group_key} (Top {top_n})')
-    plt.gca().invert_yaxis()
+    
+    if group_key == 'Âge':
+        plt.bar(labels, pass_rates, color='skyblue')
+        plt.xlabel(group_key)
+        plt.ylabel('Taux de réussite (%)')
+        plt.title(f'Taux de réussite par {group_key}')
+        plt.xticks(rotation=45, ha="right")
+    else:
+        plt.barh(labels, pass_rates, color='skyblue')
+        plt.xlabel('Taux de réussite (%)')
+        plt.title(f'Taux de réussite par {group_key} (Top {top_n})')
+        plt.gca().invert_yaxis()
+
     plt.tight_layout()
     filepath = os.path.join(output_dir, f'pass_rate_by_{group_key}.png')
     plt.savefig(filepath)
@@ -155,7 +193,7 @@ def main():
         print("2. Recherche simple d'un étudiant")
         print("3. Afficher les statistiques générales")
         print("4. Afficher les statistiques par WILAYA")
-        print("5. Afficher les statistiques par LIEU_NAIS")
+        print("5. Afficher les statistiques par Âge")
         print("6. Générer tous les graphiques dans le dossier 'fig'")
         print("7. Quitter")
         
@@ -204,22 +242,8 @@ def main():
             
         elif choice == '5':
             clear_screen()
-            print("Note: La liste des lieux de naissance peut être très longue.")
-            limit_str = input("Combien de lieux afficher (laissez vide pour tous) ? ")
-            try:
-                limit = int(limit_str) if limit_str else None
-            except ValueError:
-                limit = None
-            stats = calculate_grouped_stats(student_data, 'LIEU_NAIS')
-            if limit:
-                lines = stats.split('\n')
-                header = lines[:2]
-                groups = '\n'.join(lines[2:]).split('\n\n')
-                print('\n'.join(header))
-                for group in groups[:limit]:
-                    print('\n' + group)
-            else:
-                print(stats)
+            stats = calculate_grouped_stats(student_data, 'Âge')
+            print(stats)
             input("\nAppuyez sur Entrée pour continuer...")
 
         elif choice == '6':
@@ -243,7 +267,7 @@ def main():
             
             plot_decision_distribution(student_data, output_dir)
             plot_pass_rate_by_group(student_data, 'WILAYA', output_dir)
-            plot_pass_rate_by_group(student_data, 'LIEU_NAIS', output_dir)
+            plot_pass_rate_by_group(student_data, 'Âge', output_dir)
             
             print("\nTerminé.")
             input("Appuyez sur Entrée pour continuer...")
@@ -257,4 +281,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
