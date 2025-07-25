@@ -1,8 +1,13 @@
-
-
 import csv
 import os
 from collections import Counter
+import sys
+
+try:
+    import matplotlib.pyplot as plt
+    MATPLOTLIB_AVAILABLE = True
+except ImportError:
+    MATPLOTLIB_AVAILABLE = False
 
 def clear_screen():
     """Clears the console screen."""
@@ -18,7 +23,6 @@ def load_data(filename="data/RESU_BEPC_2025_74821.csv"):
         with open(filename, mode='r', encoding='utf-8') as csvfile:
             reader = csv.DictReader(csvfile, delimiter=',')
             for row in reader:
-                # Convert numeric fields from string to float/int
                 try:
                     row['Num_Bepc'] = int(row['Num_Bepc'])
                     row['Moyenne_Bepc'] = float(row['Moyenne_Bepc'])
@@ -63,7 +67,7 @@ def calculate_general_stats(data):
         return "Aucune donnée à analyser."
 
     total_students = len(data)
-    decisions = [s['Decision'] for s in [s for s in data if 'Decision' in s]]
+    decisions = [s['Decision'] for s in data if 'Decision' in s]
     decision_counts = Counter(decisions)
     
     admis_count = decision_counts.get('Admis', 0)
@@ -83,13 +87,8 @@ def calculate_general_stats(data):
     )
     return stats
 
-def calculate_grouped_stats(data, group_key):
-    """
-    Calculates and returns statistics grouped by a specific key (e.g., 'WILAYA').
-    """
-    if not data:
-        return "Aucune donnée à analyser."
-
+def get_grouped_data(data, group_key):
+    """Helper function to get grouped data."""
     grouped_data = {}
     for student in data:
         key = student.get(group_key)
@@ -101,11 +100,20 @@ def calculate_grouped_stats(data, group_key):
                 grouped_data[key]['admis'] += 1
             if 'Moyenne_Bepc' in student:
                 grouped_data[key]['averages'].append(student['Moyenne_Bepc'])
+    return grouped_data
 
+def calculate_grouped_stats(data, group_key):
+    """
+    Calculates and returns statistics grouped by a specific key (e.g., 'WILAYA').
+    """
+    if not data:
+        return "Aucune donnée à analyser."
+
+    grouped_data = get_grouped_data(data, group_key)
+    
     report = f"Statistiques par {group_key} :\n"
     report += "------------------------------------\n"
     
-    # Sort by the number of students in descending order
     sorted_groups = sorted(grouped_data.items(), key=lambda item: item[1]['total'], reverse=True)
 
     for key, values in sorted_groups:
@@ -121,6 +129,36 @@ def calculate_grouped_stats(data, group_key):
             f"  Moyenne : {avg_score:.2f}\n"
         )
     return report
+
+def plot_decision_distribution(data):
+    """Plots the distribution of decisions (Admis vs. others)."""
+    decisions = [s['Decision'] for s in data if 'Decision' in s]
+    decision_counts = Counter(decisions)
+    
+    plt.figure(figsize=(8, 6))
+    plt.pie(decision_counts.values(), labels=decision_counts.keys(), autopct='%1.1f%%', startangle=140)
+    plt.title('Répartition des décisions')
+    plt.ylabel('')
+    plt.savefig('decision_distribution.png')
+    print("Graphique 'decision_distribution.png' sauvegardé.")
+
+def plot_pass_rate_by_group(data, group_key, top_n=15):
+    """Plots the pass rate for the top N groups."""
+    grouped_data = get_grouped_data(data, group_key)
+    
+    sorted_groups = sorted(grouped_data.items(), key=lambda item: item[1]['total'], reverse=True)[:top_n]
+    
+    labels = [g[0] for g in sorted_groups]
+    pass_rates = [(g[1]['admis'] / g[1]['total']) * 100 if g[1]['total'] > 0 else 0 for g in sorted_groups]
+    
+    plt.figure(figsize=(12, 8))
+    plt.barh(labels, pass_rates, color='skyblue')
+    plt.xlabel('Taux de réussite (%)')
+    plt.title(f'Taux de réussite par {group_key} (Top {top_n})')
+    plt.gca().invert_yaxis()
+    plt.tight_layout()
+    plt.savefig(f'pass_rate_by_{group_key}.png')
+    print(f"Graphique 'pass_rate_by_{group_key}.png' sauvegardé.")
 
 def main():
     """
@@ -138,9 +176,10 @@ def main():
         print("3. Afficher les statistiques générales")
         print("4. Afficher les statistiques par WILAYA")
         print("5. Afficher les statistiques par LIEU_NAIS")
-        print("6. Quitter")
+        print("6. Générer des graphiques")
+        print("7. Quitter")
         
-        choice = input("Veuillez choisir une option (1-6) : ")
+        choice = input("Veuillez choisir une option (1-7) : ")
 
         if choice == '1':
             try:
@@ -185,7 +224,6 @@ def main():
             
         elif choice == '5':
             clear_screen()
-            # This might produce a very long list. We can limit it.
             print("Note: La liste des lieux de naissance peut être très longue.")
             limit_str = input("Combien de lieux afficher (laissez vide pour tous) ? ")
             try:
@@ -209,6 +247,37 @@ def main():
             input("\nAppuyez sur Entrée pour continuer...")
 
         elif choice == '6':
+            if not MATPLOTLIB_AVAILABLE:
+                print("La bibliothèque Matplotlib n'est pas installée.")
+                install = input("Voulez-vous l'installer maintenant (pip install matplotlib) ? (o/n): ")
+                if install.lower() == 'o':
+                    os.system(f"{sys.executable} -m pip install matplotlib")
+                    print("\nMatplotlib a été installé. Veuillez relancer le script.")
+                else:
+                    print("Opération annulée.")
+                input("\nAppuyez sur Entrée pour continuer...")
+                continue
+
+            clear_screen()
+            print("\n--- Génération de Graphiques ---")
+            print("1. Répartition des décisions (Admis/Non Admis)")
+            print("2. Taux de réussite par WILAYA")
+            print("3. Taux de réussite par LIEU_NAIS (Top 15)")
+            
+            plot_choice = input("Choisissez un graphique à générer (1-3) : ")
+            
+            if plot_choice == '1':
+                plot_decision_distribution(student_data)
+            elif plot_choice == '2':
+                plot_pass_rate_by_group(student_data, 'WILAYA')
+            elif plot_choice == '3':
+                plot_pass_rate_by_group(student_data, 'LIEU_NAIS')
+            else:
+                print("Choix invalide.")
+            
+            input("\nAppuyez sur Entrée pour continuer...")
+
+        elif choice == '7':
             print("Merci d'avoir utilisé le script. Au revoir !")
             break
         else:
@@ -217,4 +286,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
