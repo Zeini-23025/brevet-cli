@@ -7,13 +7,16 @@ Il permet aux utilisateurs d'explorer les données de manière interactive, de r
 ## Structure du Projet
 
 ```
-/home/zeiny/brevet-cli/
+brevet-cli/
 ├───README.md
 ├───student_analyzer.py
 ├───.git/
 ├───data/
 │   ├───RESU_BEPC_2025_74821.csv
-│   └───RESU_BEPC_2025_74821.xlsx
+│   ├───RESU_BEPC_2025_74821.xlsx
+│   └───results.json
+├───scripts/
+│   └───convert_to_json.py
 └───fig/
     ├───decision_distribution.png
     ├───pass_rate_by_Âge.png
